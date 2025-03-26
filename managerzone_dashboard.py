@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import subprocess
@@ -31,7 +32,7 @@ st.title("📊 ManagerZone Analiz Merkezi")
 
 # En son güncelleme tarihi
 last_update = get_last_update()
-st.markdown(f"📅 **Son veri tarihi:** `{last_update}`")
+st.markdown(f"📅 **Son veri tarihi:** {last_update}")
 
 # GÜNCELLE BUTONU
 if st.button("🔄 Verileri Güncelle (veri.py)"):
@@ -48,7 +49,9 @@ menu = st.sidebar.radio("Bir analiz seç:", [
     "Aktif Oyuncular (Maçlara Çıkanlar)",
     "En Çok Maç Oynayanlar",
     "U18/U21/U23 Kadro Detayları",
-    "En İyi 11'ler"
+    "En İyi 11'ler",
+    "Oyuncu Performans Analizi",
+    "Takım Performansı"
 ])
 
 players_all = load_all_csv("players_all")
@@ -71,7 +74,43 @@ def apply_filters(df):
         df = df[(df["value"] >= value_min) & (df["value"] <= value_max)]
     return df
 
-if menu == "Kadro Gücü ve Gençlik Analizi":
+# Oyuncu Performans Analizi
+if menu == "Oyuncu Performans Analizi":
+    st.subheader("⚽ Lig Maçlarındaki Oyuncu Performansları")
+    if match_details_all.empty or players_all.empty:
+        st.warning("Veri bulunamadı.")
+    else:
+        # Sadece lig maçlarını filtrele
+        league_matches = matches_all[matches_all["match_type"] == "League"]
+        league_match_ids = league_matches["match_id"].unique()
+        league_players = match_details_all[match_details_all["match_id"].isin(league_match_ids)]
+        
+        # Performans analizi (goller, asistler)
+        player_performance = league_players.groupby(["player_id", "name"]).agg(
+            total_goals=("goals", "sum"),
+            total_assists=("assists", "sum"),
+            total_matches=("match_id", "count")
+        ).reset_index()
+        
+        st.dataframe(player_performance.sort_values(by="total_goals", ascending=False))
+
+# Takım Performansı
+if menu == "Takım Performansı":
+    st.subheader("🏆 Lig Takımı Performansları")
+    if matches_all.empty:
+        st.warning("Maç verisi bulunamadı.")
+    else:
+        # Sadece lig maçlarını filtrele
+        league_matches = matches_all[matches_all["match_type"] == "League"]
+        team_performance = league_matches.groupby("team_name").agg(
+            wins=("won", "sum"),
+            losses=("lost", "sum"),
+            total_matches=("match_id", "count")
+        ).reset_index()
+
+        st.dataframe(team_performance.sort_values(by="wins", ascending=False))
+
+elif menu == "Kadro Gücü ve Gençlik Analizi":
     st.subheader("🔝 Takımların Kadro Değeri ve Gençlik Profili")
     df_filtered = apply_filters(players_all)
     if df_filtered.empty:
@@ -180,31 +219,3 @@ elif menu == "En İyi 11'ler":
             xaxis_rangeslider_visible=False
         )
         st.plotly_chart(fig)
-
-# Takım ve oyuncu detayları
-def display_player_details(player_name):
-    player = players_all[players_all["name"] == player_name].iloc[0]
-    st.write(f"**{player['name']}**")
-    st.write(f"Yaş: {player['age']}")
-    st.write(f"Değer: {player['value']}")
-    matches_played = match_details_all[match_details_all["player_id"] == player["player_id"]]
-    st.write(f"Oynadığı Maç Sayısı: {matches_played.shape[0]}")
-
-def display_team_details(team_name):
-    team_players = players_all[players_all["team_name"] == team_name]
-    total_value = team_players["value"].sum()
-    transfers = team_players.groupby("team_name")["player_id"].count().reset_index(name="transfers")
-    st.write(f"**{team_name}**")
-    st.write(f"Kadro Değeri: {total_value}")
-    st.write(f"Yapılan Transfer Sayısı: {transfers['transfers'].iloc[0]}")
-    st.write(f"**Tahmini Lig Sıralaması:** 3. (Örnek Sıralama)")  # Bu kısmı daha dinamik hale getirebiliriz
-    st.write(f"**Aktif Durum:** Aktif" )  # Bu kısmı da sistemle bağlayabiliriz
-
-# Oyuncu ve Takım Detayları
-if st.button("Takım Detayları"):
-    team_name = st.selectbox("Bir takım seç", players_all["team_name"].unique(), key="team_selectbox_2")
-    display_team_details(team_name)
-
-if st.button("Oyuncu Detayları"):
-    player_name = st.selectbox("Bir oyuncu seç", players_all["name"].unique(), key="player_selectbox_1")
-    display_player_details(player_name)

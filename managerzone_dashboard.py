@@ -1,8 +1,7 @@
-
 import streamlit as st
 import pandas as pd
 import subprocess
-import plotly.graph_objects as go
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -32,7 +31,7 @@ st.title("📊 ManagerZone Analiz Merkezi")
 
 # En son güncelleme tarihi
 last_update = get_last_update()
-st.markdown(f"📅 **Son veri tarihi:** {last_update}")
+st.markdown(f"📅 **Son veri tarihi:** `{last_update}`")
 
 # GÜNCELLE BUTONU
 if st.button("🔄 Verileri Güncelle (veri.py)"):
@@ -49,9 +48,7 @@ menu = st.sidebar.radio("Bir analiz seç:", [
     "Aktif Oyuncular (Maçlara Çıkanlar)",
     "En Çok Maç Oynayanlar",
     "U18/U21/U23 Kadro Detayları",
-    "En İyi 11'ler",
-    "Oyuncu Performans Analizi",
-    "Takım Performansı"
+    "En İyi 11'ler"
 ])
 
 players_all = load_all_csv("players_all")
@@ -74,43 +71,7 @@ def apply_filters(df):
         df = df[(df["value"] >= value_min) & (df["value"] <= value_max)]
     return df
 
-# Oyuncu Performans Analizi
-if menu == "Oyuncu Performans Analizi":
-    st.subheader("⚽ Lig Maçlarındaki Oyuncu Performansları")
-    if match_details_all.empty or players_all.empty:
-        st.warning("Veri bulunamadı.")
-    else:
-        # Sadece lig maçlarını filtrele
-        league_matches = matches_all[matches_all["match_type"] == "League"]
-        league_match_ids = league_matches["match_id"].unique()
-        league_players = match_details_all[match_details_all["match_id"].isin(league_match_ids)]
-        
-        # Performans analizi (goller, asistler)
-        player_performance = league_players.groupby(["player_id", "name"]).agg(
-            total_goals=("goals", "sum"),
-            total_assists=("assists", "sum"),
-            total_matches=("match_id", "count")
-        ).reset_index()
-        
-        st.dataframe(player_performance.sort_values(by="total_goals", ascending=False))
-
-# Takım Performansı
-if menu == "Takım Performansı":
-    st.subheader("🏆 Lig Takımı Performansları")
-    if matches_all.empty:
-        st.warning("Maç verisi bulunamadı.")
-    else:
-        # Sadece lig maçlarını filtrele
-        league_matches = matches_all[matches_all["match_type"] == "League"]
-        team_performance = league_matches.groupby("team_name").agg(
-            wins=("won", "sum"),
-            losses=("lost", "sum"),
-            total_matches=("match_id", "count")
-        ).reset_index()
-
-        st.dataframe(team_performance.sort_values(by="wins", ascending=False))
-
-elif menu == "Kadro Gücü ve Gençlik Analizi":
+if menu == "Kadro Gücü ve Gençlik Analizi":
     st.subheader("🔝 Takımların Kadro Değeri ve Gençlik Profili")
     df_filtered = apply_filters(players_all)
     if df_filtered.empty:
@@ -195,27 +156,30 @@ elif menu == "En İyi 11'ler":
         top11_players = team_players.nlargest(11, "value")[["name", "age", "value"]]
         st.dataframe(top11_players)
 
-        # Günlük kadro değeri grafiği
-        daily_values = team_players.groupby("date")["value"].sum()
-        
-        # Grafik için değerleri 0 - 20 milyon arasında normalize et
-        daily_values_normalized = daily_values.clip(upper=20000000)  # 20 milyon üstü verileri 20 milyonla sınırlıyoruz
+# Takım ve oyuncu detayları
+def display_player_details(player_id):
+    player = players_all[players_all["player_id"] == player_id].iloc[0]
+    st.write(f"**{player['name']}**")
+    st.write(f"Yaş: {player['age']}")
+    st.write(f"Değer: {player['value']}")
+    matches_played = match_details_all[match_details_all["player_id"] == player_id]
+    st.write(f"Oynadığı Maç Sayısı: {matches_played.shape[0]}")
 
-        st.subheader(f"📅 Kadro Değeri (Zaman Serisi) - {team_name}")
+def display_team_details(team_name):
+    team_players = players_all[players_all["team_name"] == team_name]
+    total_value = team_players["value"].sum()
+    transfers = team_players.groupby("team_name")["player_id"].count().reset_index(name="transfers")
+    st.write(f"**{team_name}**")
+    st.write(f"Kadro Değeri: {total_value}")
+    st.write(f"Yapılan Transfer Sayısı: {transfers['transfers'].iloc[0]}")
+    st.write(f"**Tahmini Lig Sıralaması:** 3. (Örnek Sıralama)")  # Bu kısmı daha dinamik hale getirebiliriz
+    st.write(f"**Aktif Durum:** Aktif" )  # Bu kısmı da sistemle bağlayabiliriz
 
-        # Mum grafik oluşturulması
-        fig = go.Figure(data=[go.Candlestick(
-            x=daily_values_normalized.index,
-            open=daily_values_normalized.values,
-            high=daily_values_normalized.values,
-            low=daily_values_normalized.values,
-            close=daily_values_normalized.values
-        )])
+# Oyuncu ve Takım Detayları
+if st.button("Takım Detayları"):
+    team_name = st.selectbox("Bir takım seç", players_all["team_name"].unique(), key="team_selectbox_2")
+    display_team_details(team_name)
 
-        fig.update_layout(
-            title=f"{team_name} Kadro Değeri - Günlük Değişim",
-            xaxis_title="Tarih",
-            yaxis_title="Kadro Değeri",
-            xaxis_rangeslider_visible=False
-        )
-        st.plotly_chart(fig)
+if st.button("Oyuncu Detayları"):
+    player_id = st.selectbox("Bir oyuncu seç", players_all["player_id"].unique(), key="player_selectbox_1")
+    display_player_details(player_id)

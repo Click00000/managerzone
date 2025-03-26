@@ -39,7 +39,6 @@ if st.button("🔄 Verileri Güncelle (veri.py)"):
         result = subprocess.run(["python3", str(VERI_SCRIPT_PATH)], capture_output=True, text=True)
         st.success("Veri çekimi tamamlandı!")
         st.code(result.stdout[-1500:])
-
 # Sol Sidebar Menüsü
 st.sidebar.title("📂 Menü")
 menu = st.sidebar.radio("Bir analiz seç:", [

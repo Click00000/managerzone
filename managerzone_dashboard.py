@@ -1,68 +1,94 @@
 import streamlit as st
 import pandas as pd
 
-# CSV dosyalarını yüklemek
-def load_csv(file):
-    df = pd.read_csv(file)
-    return df
+# Dosya yükleme
+st.title('ManagerZone Analiz Merkezi')
+st.sidebar.title("Veri Yükleme ve Filtreleme")
 
-st.title("ManagerZone Analiz Merkezi")
+# Verileri yükle
+players_file = st.sidebar.file_uploader("Oyuncu Verisini Yükle", type=["csv"])
+teams_file = st.sidebar.file_uploader("Takım ve Lig Verisini Yükle", type=["csv"])
 
-# CSV Yükleme
-players_file = st.file_uploader("Oyuncu Verisini Yükleyin", type=["csv"])
-teams_file = st.file_uploader("Takım Verisini Yükleyin", type=["csv"])
-
-# Eğer dosyalar yüklenirse işlemi başlat
+# Dosyalar yüklendiyse, CSV'leri pandas dataframe olarak al
 if players_file is not None and teams_file is not None:
-    players_df = load_csv(players_file)
-    teams_df = load_csv(teams_file)
+    players_df = pd.read_csv(players_file)
+    teams_df = pd.read_csv(teams_file)
 
-    # 2. Lig Dropdown Menüsü
-    leagues = teams_df["league_name"].unique()
-    selected_league = st.selectbox("Ligi Seç", leagues)
+    st.sidebar.success("Veriler başarıyla yüklendi!")
 
-    # Ligdeki Takımlar
-    league_teams = teams_df[teams_df["league_name"] == selected_league]
-    st.write("Ligdeki Takımlar ve Değerleri", league_teams)
+    # Sayfa seçim
+    page = st.sidebar.radio("Veri Görüntüleme", ["Takım", "Lig", "Oyuncu"])
 
-    # U18, U21, U23 Değer, Maaş, Kadro Değeri
-    u18_df = players_df[players_df["age"] <= 18]
-    u21_df = players_df[players_df["age"] <= 21]
-    u23_df = players_df[players_df["age"] <= 23]
-    
-    st.write("U18 Kadro Değeri:", u18_df["value"].sum())
-    st.write("U21 Kadro Değeri:", u21_df["value"].sum())
-    st.write("U23 Kadro Değeri:", u23_df["value"].sum())
-    
-    # 3. Oyuncu Filtreleme
-    player_name = st.selectbox("Oyuncu Seç", players_df["name"].unique())
-    selected_player = players_df[players_df["name"] == player_name].iloc[0]
-    
-    st.write(f"**{selected_player['name']}**")
-    st.write(f"Yaş: {selected_player['age']}")
-    st.write(f"Değer: {selected_player['value']}")
-    st.write(f"Maaş: {selected_player['salary']}")
-    st.write(f"Ülke: {selected_player['countryShortname']}")
-    
-    # 4. Takım Verisi
-    team_name = st.selectbox("Takım Seç", league_teams["teamName"].unique())
-    team_players = players_df[players_df["teamName"] == team_name]
+    # 1. Takım Sayfası
+    if page == "Takım":
+        st.subheader("Takımların Değerleri ve Filtreleme")
 
-    # U18, U21, U23 oyuncularını ayrı ayrı gösterelim
-    u18_team = team_players[team_players["age"] <= 18]
-    u21_team = team_players[team_players["age"] <= 21]
-    u23_team = team_players[team_players["age"] <= 23]
-    
-    st.write(f"**{team_name}** Takımının U18 Oyuncuları", u18_team)
-    st.write(f"**{team_name}** Takımının U21 Oyuncuları", u21_team)
-    st.write(f"**{team_name}** Takımının U23 Oyuncuları", u23_team)
+        # Takım Seçimi
+        team_name = st.selectbox("Takım Seç", players_df["team_name"].unique())
+        team_data = players_df[players_df["team_name"] == team_name]
 
-    # En değerli 11 oyuncu
-    top11_players = team_players.nlargest(11, "value")[["name", "age", "value", "salary"]]
-    st.write(f"**{team_name}** Takımının En Değerli 11 Oyuncusu", top11_players)
-    
-    # Tüm takımları ve oyuncularını görmek için:
-    st.write("Takımın Bütün Oyuncuları", team_players)
+        # Takım bilgileri
+        total_team_value = team_data["value"].sum()
+        st.write(f"Toplam Kadro Değeri: {total_team_value:,} €")
 
+        # U18, U21, U23 Kadro Değerleri
+        u18_value = team_data[team_data["age"] <= 18]["value"].sum()
+        u21_value = team_data[team_data["age"] <= 21]["value"].sum()
+        u23_value = team_data[team_data["age"] <= 23]["value"].sum()
+
+        st.write(f"U18 Kadro Değeri: {u18_value:,} €")
+        st.write(f"U21 Kadro Değeri: {u21_value:,} €")
+        st.write(f"U23 Kadro Değeri: {u23_value:,} €")
+
+        # En değerli 11 oyuncu
+        top_11 = team_data.nlargest(11, 'value')
+        st.write("En Değerli 11 Oyuncu:")
+        st.dataframe(top_11[["name", "age", "value"]])
+
+    # 2. Lig Sayfası
+    elif page == "Lig":
+        st.subheader("Ligler ve Takım Değerleri")
+
+        # Lig Seçimi
+        league_name = st.selectbox("Lig Seç", teams_df["league_name"].unique())
+        league_teams = teams_df[teams_df["league_name"] == league_name]
+
+        # Lig verileri
+        total_value = league_teams["value"].sum()
+        u18_value = league_teams[league_teams["age"] <= 18]["value"].sum()
+        u21_value = league_teams[league_teams["age"] <= 21]["value"].sum()
+        u23_value = league_teams[league_teams["age"] <= 23]["value"].sum()
+
+        st.write(f"Toplam Kadro Değeri: {total_value:,} €")
+        st.write(f"U18 Kadro Değeri: {u18_value:,} €")
+        st.write(f"U21 Kadro Değeri: {u21_value:,} €")
+        st.write(f"U23 Kadro Değeri: {u23_value:,} €")
+
+        # Takımları listele
+        st.write("Ligdeki Takımlar:")
+        st.dataframe(league_teams[["team_name", "value", "team_id"]])
+
+    # 3. Oyuncu Sayfası
+    elif page == "Oyuncu":
+        st.subheader("Oyuncu Analizi")
+
+        # Oyuncu Seçimi
+        player_name = st.selectbox("Oyuncu Seç", players_df["name"].unique())
+        player_data = players_df[players_df["name"] == player_name]
+
+        st.write("Oyuncu Bilgileri:")
+        st.write(player_data[["name", "age", "value", "salary", "countryShortname"]])
+
+        # Oyuncunun takım bilgisi
+        team_name = player_data["team_name"].iloc[0]
+        team_value = players_df[players_df["team_name"] == team_name]["value"].sum()
+
+        st.write(f"Takım: {team_name}")
+        st.write(f"Takım Kadro Değeri: {team_value:,} €")
+
+        # Oyuncunun oynadığı maç sayısı (dummy veri ekleyebilirsiniz)
+        st.write(f"Oynanan Maç Sayısı: {len(player_data)}")
+
+# Eğer dosyalar yüklenmemişse, uyarı göster
 else:
-    st.warning("Lütfen her iki CSV dosyasını yükleyin.")
+    st.sidebar.warning("Lütfen CSV dosyalarını yükleyin.")

@@ -1,54 +1,68 @@
 import streamlit as st
 import pandas as pd
 
-# Kullanıcının yüklediği CSV dosyalarını yüklemek için gerekli fonksiyon
-@st.cache_data
-def load_data(file):
-    return pd.read_csv(file)
+# CSV dosyalarını yüklemek
+def load_csv(file):
+    df = pd.read_csv(file)
+    return df
 
-# Kullanıcıdan CSV dosyalarını yüklemesini iste
-st.title("📊 ManagerZone Analiz Merkezi")
+st.title("ManagerZone Analiz Merkezi")
 
-# CSV yükleme
+# CSV Yükleme
 players_file = st.file_uploader("Oyuncu Verisini Yükleyin", type=["csv"])
-leagues_file = st.file_uploader("Lig ve Takım Verisini Yükleyin", type=["csv"])
+teams_file = st.file_uploader("Takım Verisini Yükleyin", type=["csv"])
 
-if players_file and leagues_file:
-    players_df = load_data(players_file)
-    leagues_df = load_data(leagues_file)
+# Eğer dosyalar yüklenirse işlemi başlat
+if players_file is not None and teams_file is not None:
+    players_df = load_csv(players_file)
+    teams_df = load_csv(teams_file)
+
+    # 2. Lig Dropdown Menüsü
+    leagues = teams_df["league_name"].unique()
+    selected_league = st.selectbox("Ligi Seç", leagues)
+
+    # Ligdeki Takımlar
+    league_teams = teams_df[teams_df["league_name"] == selected_league]
+    st.write("Ligdeki Takımlar ve Değerleri", league_teams)
+
+    # U18, U21, U23 Değer, Maaş, Kadro Değeri
+    u18_df = players_df[players_df["age"] <= 18]
+    u21_df = players_df[players_df["age"] <= 21]
+    u23_df = players_df[players_df["age"] <= 23]
     
-    # Ligler ve Takımlar
-    st.subheader("🏅 Takımlar ve Ligler")
-    league_info = leagues_df[["team_id", "team_name", "league"]].drop_duplicates()
-    st.dataframe(league_info)
-
-    # Takım bazında oyuncu sayısı
-    team_player_count = players_df.groupby("team_name").size().reset_index(name="player_count")
-    st.subheader("📊 Takım Oyuncu Sayısı")
-    st.dataframe(team_player_count)
-
-    # Takım ve oyuncu detayları
-    st.subheader("⚽ Takım ve Oyuncu Detayları")
-    team_name = st.selectbox("Bir takım seçin", players_df["team_name"].unique())
+    st.write("U18 Kadro Değeri:", u18_df["value"].sum())
+    st.write("U21 Kadro Değeri:", u21_df["value"].sum())
+    st.write("U23 Kadro Değeri:", u23_df["value"].sum())
     
-    team_players = players_df[players_df["team_name"] == team_name]
-    st.write(f"{team_name} Takımındaki Oyuncular:")
-    st.dataframe(team_players)
+    # 3. Oyuncu Filtreleme
+    player_name = st.selectbox("Oyuncu Seç", players_df["name"].unique())
+    selected_player = players_df[players_df["name"] == player_name].iloc[0]
+    
+    st.write(f"**{selected_player['name']}**")
+    st.write(f"Yaş: {selected_player['age']}")
+    st.write(f"Değer: {selected_player['value']}")
+    st.write(f"Maaş: {selected_player['salary']}")
+    st.write(f"Ülke: {selected_player['countryShortname']}")
+    
+    # 4. Takım Verisi
+    team_name = st.selectbox("Takım Seç", league_teams["teamName"].unique())
+    team_players = players_df[players_df["teamName"] == team_name]
 
-    # En değerli oyuncu
-    st.subheader(f"🏅 {team_name} Takımının En Değerli Oyuncusu")
-    most_valuable_player = team_players.loc[team_players["value"].idxmax()]
-    st.write(f"**{most_valuable_player['name']}**")
-    st.write(f"Değer: {most_valuable_player['value']}")
+    # U18, U21, U23 oyuncularını ayrı ayrı gösterelim
+    u18_team = team_players[team_players["age"] <= 18]
+    u21_team = team_players[team_players["age"] <= 21]
+    u23_team = team_players[team_players["age"] <= 23]
+    
+    st.write(f"**{team_name}** Takımının U18 Oyuncuları", u18_team)
+    st.write(f"**{team_name}** Takımının U21 Oyuncuları", u21_team)
+    st.write(f"**{team_name}** Takımının U23 Oyuncuları", u23_team)
 
-    # Yaş ve Değer Dağılımı
-    st.subheader(f"📊 {team_name} Takımının Yaş ve Değer Dağılımı")
-    st.bar_chart(team_players.groupby("age")["value"].sum())
-
-    # Takımların Ligdeki Durumu
-    league_status = leagues_df.groupby("league").size().reset_index(name="team_count")
-    st.subheader("📈 Lig Durumu")
-    st.dataframe(league_status)
+    # En değerli 11 oyuncu
+    top11_players = team_players.nlargest(11, "value")[["name", "age", "value", "salary"]]
+    st.write(f"**{team_name}** Takımının En Değerli 11 Oyuncusu", top11_players)
+    
+    # Tüm takımları ve oyuncularını görmek için:
+    st.write("Takımın Bütün Oyuncuları", team_players)
 
 else:
-    st.warning("Lütfen her iki CSV dosyasını yükleyin!")
+    st.warning("Lütfen her iki CSV dosyasını yükleyin.")

@@ -1,94 +1,79 @@
 import streamlit as st
 import pandas as pd
 
-# Dosya yükleme
-st.title('ManagerZone Analiz Merkezi')
-st.sidebar.title("Veri Yükleme ve Filtreleme")
+# CSV dosyasını yükle
+@st.cache_data
+def load_csv(file):
+    return pd.read_csv(file)
 
-# Verileri yükle
-players_file = st.sidebar.file_uploader("Oyuncu Verisini Yükle", type=["csv"])
-teams_file = st.sidebar.file_uploader("Takım ve Lig Verisini Yükle", type=["csv"])
+# CSV dosyalarını yükle
+players_file = st.file_uploader("Oyuncu Verisini Yükleyin", type=["csv"])
+leagues_file = st.file_uploader("Lig ve Takım Verisini Yükleyin", type=["csv"])
 
-# Dosyalar yüklendiyse, CSV'leri pandas dataframe olarak al
-if players_file is not None and teams_file is not None:
-    players_df = pd.read_csv(players_file)
-    teams_df = pd.read_csv(teams_file)
+# Veriler yüklenmişse
+if players_file is not None and leagues_file is not None:
+    players_df = load_csv(players_file)
+    leagues_df = load_csv(leagues_file)
+    
+    # Takım ve oyuncu sayıları analizi
+    st.subheader("📊 Takım ve Oyuncu Analizi")
+    team_player_count = players_df.groupby("teamName").size().reset_index(name="player_count")
+    st.write("Her Takımda Bulunan Oyuncu Sayıları")
+    st.dataframe(team_player_count)
 
-    st.sidebar.success("Veriler başarıyla yüklendi!")
+    # Lig ve takım bilgisi
+    st.subheader("🏅 Takımlar ve Ligler")
+    league_info = leagues_df[["teamId", "teamName", "league_name"]].drop_duplicates()
+    st.dataframe(league_info)
 
-    # Sayfa seçim
-    page = st.sidebar.radio("Veri Görüntüleme", ["Takım", "Lig", "Oyuncu"])
+    # Kadro Değerleri
+    st.subheader("💰 Kadro Değerleri")
+    team_value = players_df.groupby("teamName").agg({
+        "value": "sum",
+        "salary": "sum",
+        "age": "mean"
+    }).reset_index()
 
-    # 1. Takım Sayfası
-    if page == "Takım":
-        st.subheader("Takımların Değerleri ve Filtreleme")
+    team_value = team_value.rename(columns={"value": "total_value", "salary": "total_salary", "age": "average_age"})
 
-        # Takım Seçimi
-        team_name = st.selectbox("Takım Seç", players_df["team_name"].unique())
-        team_data = players_df[players_df["team_name"] == team_name]
+    st.write(f"Toplam Kadro Değeri, Toplam Maaş ve Ortalama Yaş")
+    st.dataframe(team_value)
 
-        # Takım bilgileri
-        total_team_value = team_data["value"].sum()
-        st.write(f"Toplam Kadro Değeri: {total_team_value:,} €")
+    # U18, U21, U23 kadro dağılımı
+    st.subheader("👶 Genç Kadro Dağılımları")
+    u18 = players_df[players_df["age"] <= 18].groupby("teamName").agg({
+        "value": "sum",
+        "salary": "sum"
+    }).reset_index().rename(columns={"value": "u18_value", "salary": "u18_salary"})
 
-        # U18, U21, U23 Kadro Değerleri
-        u18_value = team_data[team_data["age"] <= 18]["value"].sum()
-        u21_value = team_data[team_data["age"] <= 21]["value"].sum()
-        u23_value = team_data[team_data["age"] <= 23]["value"].sum()
+    u21 = players_df[players_df["age"] <= 21].groupby("teamName").agg({
+        "value": "sum",
+        "salary": "sum"
+    }).reset_index().rename(columns={"value": "u21_value", "salary": "u21_salary"})
 
-        st.write(f"U18 Kadro Değeri: {u18_value:,} €")
-        st.write(f"U21 Kadro Değeri: {u21_value:,} €")
-        st.write(f"U23 Kadro Değeri: {u23_value:,} €")
+    u23 = players_df[players_df["age"] <= 23].groupby("teamName").agg({
+        "value": "sum",
+        "salary": "sum"
+    }).reset_index().rename(columns={"value": "u23_value", "salary": "u23_salary"})
 
-        # En değerli 11 oyuncu
-        top_11 = team_data.nlargest(11, 'value')
-        st.write("En Değerli 11 Oyuncu:")
-        st.dataframe(top_11[["name", "age", "value"]])
+    # En değerli 11 oyuncu
+    st.subheader("⚽ En Değerli 11 Oyuncu")
+    top_11 = players_df.nlargest(11, "value")[["name", "value", "teamName"]]
+    st.dataframe(top_11)
 
-    # 2. Lig Sayfası
-    elif page == "Lig":
-        st.subheader("Ligler ve Takım Değerleri")
+    # Takıma göre oyuncu listesi
+    team_name = st.selectbox("Bir takım seç", players_df["teamName"].unique())
+    team_players = players_df[players_df["teamName"] == team_name].sort_values(by="value", ascending=False)
 
-        # Lig Seçimi
-        league_name = st.selectbox("Lig Seç", teams_df["league_name"].unique())
-        league_teams = teams_df[teams_df["league_name"] == league_name]
-
-        # Lig verileri
-        total_value = league_teams["value"].sum()
-        u18_value = league_teams[league_teams["age"] <= 18]["value"].sum()
-        u21_value = league_teams[league_teams["age"] <= 21]["value"].sum()
-        u23_value = league_teams[league_teams["age"] <= 23]["value"].sum()
-
-        st.write(f"Toplam Kadro Değeri: {total_value:,} €")
-        st.write(f"U18 Kadro Değeri: {u18_value:,} €")
-        st.write(f"U21 Kadro Değeri: {u21_value:,} €")
-        st.write(f"U23 Kadro Değeri: {u23_value:,} €")
-
-        # Takımları listele
-        st.write("Ligdeki Takımlar:")
-        st.dataframe(league_teams[["team_name", "value", "team_id"]])
-
-    # 3. Oyuncu Sayfası
-    elif page == "Oyuncu":
-        st.subheader("Oyuncu Analizi")
-
-        # Oyuncu Seçimi
-        player_name = st.selectbox("Oyuncu Seç", players_df["name"].unique())
-        player_data = players_df[players_df["name"] == player_name]
-
-        st.write("Oyuncu Bilgileri:")
-        st.write(player_data[["name", "age", "value", "salary", "countryShortname"]])
-
-        # Oyuncunun takım bilgisi
-        team_name = player_data["team_name"].iloc[0]
-        team_value = players_df[players_df["team_name"] == team_name]["value"].sum()
-
-        st.write(f"Takım: {team_name}")
-        st.write(f"Takım Kadro Değeri: {team_value:,} €")
-
-        # Oyuncunun oynadığı maç sayısı (dummy veri ekleyebilirsiniz)
-        st.write(f"Oynanan Maç Sayısı: {len(player_data)}")
-
-# Eğer dosyalar yüklenmemişse, uyarı göster
-else:
-    st.sidebar.warning("Lütfen CSV dosyalarını yükleyin.")
+    st.subheader(f"{team_name} Oyuncu Listesi")
+    st.dataframe(team_players[["name", "age", "value", "salary"]])
+    
+    # Kadro Değerleri Sonuçları
+    team_summary = team_value[team_value["teamName"] == team_name]
+    if not team_summary.empty:
+        st.write(f"{team_name} Kadro Değerleri:")
+        st.write(f"Toplam Kadro Değeri: {team_summary['total_value'].values[0]} €")
+        st.write(f"Toplam Maaş: {team_summary['total_salary'].values[0]} €")
+        st.write(f"Ortalama Yaş: {team_summary['average_age'].values[0]}")
+    else:
+        st.write("Seçilen takımın kadro değerleri bulunamadı.")

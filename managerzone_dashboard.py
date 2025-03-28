@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 import subprocess
-import os
 from datetime import datetime
 from pathlib import Path
 
-# Veri dosyalarının bulunduğu klasör yolu
-DATA_DIR = Path(__file__).parent  # Dosya ile aynı klasör
-VERI_SCRIPT_PATH = DATA_DIR / "veri.py"  # Veri dosyasının python scripti
+# Klasör yolu sabit
+DATA_DIR = Path.home() / "Desktop" / "managerzone_data"
+VERI_SCRIPT_PATH = Path.home() / "Desktop" / "veri.py"
 
 # CSV yükleyici
 @st.cache_data(show_spinner=False)
@@ -18,7 +17,17 @@ def load_all_csv(name):
         return df
     return pd.DataFrame()
 
-# Tarih bilgisi göster
+# Dosya yükleyici
+st.title("📊 ManagerZone Veri Yükleme ve Analiz")
+uploaded_file = st.file_uploader("CSV dosyasını yükleyin", type=["csv"])
+
+# Dosya yüklendiyse işlemi başlat
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+    st.write(f"Yüklenen veri: {uploaded_file.name}")
+    st.dataframe(df)
+
+# En son güncelleme tarihi
 def get_last_update():
     files = sorted(DATA_DIR.glob("mz_players_*.csv"))
     if files:
@@ -26,10 +35,6 @@ def get_last_update():
         return date_str
     return "bulunamadı"
 
-st.set_page_config(page_title="ManagerZone Analiz Merkezi", layout="wide")
-st.title("📊 ManagerZone Analiz Merkezi")
-
-# En son güncelleme tarihi
 last_update = get_last_update()
 st.markdown(f"📅 **Son veri tarihi:** `{last_update}`")
 
@@ -47,18 +52,18 @@ menu = st.sidebar.radio("Bir analiz seç:", [
     "Transfer Takibi",
     "Aktif Oyuncular (Maçlara Çıkanlar)",
     "En Çok Maç Oynayanlar",
-    "U18/U21/U23 Kadro Detayları",
+    "U18/U21/U23 Kadro Detayları"
 ])
 
 players_all = load_all_csv("players_all")
 matches_all = load_all_csv("matches_all")
-match_details_all = load_all_csv("match_details_all")
 
 # Filtreler
 team_filter = st.sidebar.multiselect("Takım Seç (Opsiyonel)", options=sorted(players_all["team_name"].unique()) if not players_all.empty else [])
 age_min, age_max = st.sidebar.slider("Yaş Aralığı", 15, 40, (15, 40))
 value_min, value_max = st.sidebar.slider("Değer Aralığı", 0, 2_000_000, (0, 2_000_000))
 
+# Verilerin işlenmesi için filtre fonksiyonu
 def apply_filters(df):
     if not df.empty:
         df = df.copy()
@@ -70,6 +75,7 @@ def apply_filters(df):
         df = df[(df["value"] >= value_min) & (df["value"] <= value_max)]
     return df
 
+# Kadro Gücü ve Gençlik Analizi
 if menu == "Kadro Gücü ve Gençlik Analizi":
     st.subheader("🔝 Takımların Kadro Değeri ve Gençlik Profili")
     df_filtered = apply_filters(players_all)
@@ -97,7 +103,8 @@ if menu == "Kadro Gücü ve Gençlik Analizi":
                  .merge(count, on="team_name")
         st.dataframe(df.sort_values("top11_value", ascending=False))
 
-elif menu == "Transfer Takibi":
+# Transfer Takibi
+if menu == "Transfer Takibi":
     st.subheader("🔁 Oyuncu Transferleri")
     if players_all.empty:
         st.warning("Transfer verisi yok.")

@@ -62,6 +62,7 @@ def fetch_team_players(team, date_str):
                 "injuryDays": p.attrib.get("injuryDays"),
                 "junior": p.attrib.get("junior")
             })
+    print(f"Fetched {len(players)} players for team {team['teamName']}")
     return players
 
 def fetch_team_matches(team, date_str):
@@ -86,6 +87,7 @@ def fetch_team_matches(team, date_str):
                 "away_team": m.attrib.get("away_team_name"),
                 "away_goals": m.attrib.get("away_team_goals"),
             })
+    print(f"Fetched {len(matches)} matches for team {team['teamName']}")
     return matches
 
 def fetch_match_details(match_id, date_str):
@@ -119,6 +121,7 @@ def fetch_match_details(match_id, date_str):
                 "shirtno": p.attrib.get("shirtno"),
                 "goals": goals
             })
+    print(f"Fetched match details for match {match_id}")
     return match_players
 
 def append_to_master_file(data, filename):
@@ -131,6 +134,7 @@ def append_to_master_file(data, filename):
     else:
         df_combined = df_new
     df_combined.to_csv(path, index=False, encoding="utf-8")
+    print(f"Appended data to {filename}")
 
 # Bugünkü tarih
 now = datetime.now()
@@ -146,16 +150,13 @@ for team in TEAMS:
     try:
         print(f"\n🔍 {team['teamName']} işleniyor...")
         players = fetch_team_players(team, today_str)
-        print(f"   Oyuncu sayısı: {len(players)}")
         matches = fetch_team_matches(team, today_str)
-        print(f"   Maç sayısı: {len(matches)}")
         all_players.extend(players)
         all_matches.extend(matches)
 
         for match in matches:
             match_id = match['match_id']
             details = fetch_match_details(match_id, today_str)
-            print(f"     ↪ Match ID {match_id} detay sayısı: {len(details)}")
             all_match_details.extend(details)
         time.sleep(1)
     except Exception as e:

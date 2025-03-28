@@ -1,47 +1,42 @@
 import streamlit as st
 import pandas as pd
 import subprocess
+import os
 from datetime import datetime
 from pathlib import Path
 
 # Klasör yolu sabit
-DATA_DIR = Path.home() / "Desktop" / "managerzone_data"
-VERI_SCRIPT_PATH = Path.home() / "Desktop" / "veri.py"
+DATA_DIR = "managerzone_data"  # GitHub'daki veri dosyaları ile uyumlu
+VERI_SCRIPT_PATH = "veri.py"  # Veri güncelleme scripti
 
-# CSV yükleyici
+# CSV Yükleyici
 @st.cache_data(show_spinner=False)
 def load_all_csv(name):
-    file = DATA_DIR / f"{name}.csv"
-    if file.exists():
+    file = os.path.join(DATA_DIR, f"{name}.csv")
+    if os.path.exists(file):
         df = pd.read_csv(file)
         return df
     return pd.DataFrame()
 
-# Dosya yükleyici
-st.title("📊 ManagerZone Veri Yükleme ve Analiz")
-uploaded_file = st.file_uploader("CSV dosyasını yükleyin", type=["csv"])
-
-# Dosya yüklendiyse işlemi başlat
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.write(f"Yüklenen veri: {uploaded_file.name}")
-    st.dataframe(df)
-
-# En son güncelleme tarihi
+# Tarih bilgisi göster
 def get_last_update():
-    files = sorted(DATA_DIR.glob("mz_players_*.csv"))
+    files = sorted(Path(DATA_DIR).glob("mz_players_*.csv"))
     if files:
         date_str = files[-1].stem.replace("mz_players_", "")
         return date_str
     return "bulunamadı"
 
+st.set_page_config(page_title="ManagerZone Analiz Merkezi", layout="wide")
+st.title("📊 ManagerZone Analiz Merkezi")
+
+# En son güncelleme tarihi
 last_update = get_last_update()
 st.markdown(f"📅 **Son veri tarihi:** `{last_update}`")
 
 # GÜNCELLE BUTONU
 if st.button("🔄 Verileri Güncelle (veri.py)"):
     with st.spinner("Veriler güncelleniyor, lütfen bekleyin..."):
-        result = subprocess.run(["python3", str(VERI_SCRIPT_PATH)], capture_output=True, text=True)
+        result = subprocess.run(["python3", VERI_SCRIPT_PATH], capture_output=True, text=True)
         st.success("Veri çekimi tamamlandı!")
         st.code(result.stdout[-1500:])
 
@@ -52,18 +47,18 @@ menu = st.sidebar.radio("Bir analiz seç:", [
     "Transfer Takibi",
     "Aktif Oyuncular (Maçlara Çıkanlar)",
     "En Çok Maç Oynayanlar",
-    "U18/U21/U23 Kadro Detayları"
+    "U18/U21/U23 Kadro Detayları",
 ])
 
 players_all = load_all_csv("players_all")
 matches_all = load_all_csv("matches_all")
+match_details_all = load_all_csv("match_details_all")
 
 # Filtreler
 team_filter = st.sidebar.multiselect("Takım Seç (Opsiyonel)", options=sorted(players_all["team_name"].unique()) if not players_all.empty else [])
 age_min, age_max = st.sidebar.slider("Yaş Aralığı", 15, 40, (15, 40))
 value_min, value_max = st.sidebar.slider("Değer Aralığı", 0, 2_000_000, (0, 2_000_000))
 
-# Verilerin işlenmesi için filtre fonksiyonu
 def apply_filters(df):
     if not df.empty:
         df = df.copy()
@@ -82,7 +77,6 @@ if menu == "Kadro Gücü ve Gençlik Analizi":
     if df_filtered.empty:
         st.warning("Filtreye uyan oyuncu bulunamadı.")
     else:
-        # apply() yerine agg() kullanarak daha stabil çözüm
         top11 = (
             df_filtered.groupby("team_name")
             .agg(top11_value=("value", lambda x: x.nlargest(11).sum()))  # En büyük 11 oyuncunun değerini alıyoruz
@@ -104,7 +98,7 @@ if menu == "Kadro Gücü ve Gençlik Analizi":
         st.dataframe(df.sort_values("top11_value", ascending=False))
 
 # Transfer Takibi
-if menu == "Transfer Takibi":
+elif menu == "Transfer Takibi":
     st.subheader("🔁 Oyuncu Transferleri")
     if players_all.empty:
         st.warning("Transfer verisi yok.")
@@ -114,6 +108,7 @@ if menu == "Transfer Takibi":
         transfer_list = players_all[players_all["player_id"].isin(transfer_ids)]
         st.dataframe(transfer_list)
 
+# Aktif Oyuncular (Maçlara Çıkanlar)
 elif menu == "Aktif Oyuncular (Maçlara Çıkanlar)":
     st.subheader("⚽ Maçlara Çıkan Oyuncular")
     if match_details_all.empty:
@@ -125,6 +120,7 @@ elif menu == "Aktif Oyuncular (Maçlara Çıkanlar)":
         player_counts = df.groupby(["team_name", "player_id", "name"])["match_id"].count().reset_index(name="matches_played")
         st.dataframe(player_counts.sort_values("matches_played", ascending=False))
 
+# En Çok Maç Oynayanlar
 elif menu == "En Çok Maç Oynayanlar":
     st.subheader("🏃 En Aktif Oyuncular")
     if match_details_all.empty:
@@ -137,6 +133,7 @@ elif menu == "En Çok Maç Oynayanlar":
         top_players = top_players.sort_values("played", ascending=False)
         st.dataframe(top_players)
 
+# U18/U21/U23 Kadro Detayları
 elif menu == "U18/U21/U23 Kadro Detayları":
     st.subheader("👶 Genç Kadro Dağılımları")
     df_filtered = apply_filters(players_all)
@@ -149,3 +146,25 @@ elif menu == "U18/U21/U23 Kadro Detayları":
     with tabs[1]: st.dataframe(u18.sort_values("value", ascending=False))
     with tabs[2]: st.dataframe(u21.sort_values("value", ascending=False))
     with tabs[3]: st.dataframe(u23.sort_values("value", ascending=False))
+
+# CSV Yükleme fonksiyonu
+def load_uploaded_csv():
+    uploaded_files = st.file_uploader("CSV dosyalarını yükleyin", type="csv", accept_multiple_files=True)
+    if uploaded_files:
+        dfs = {}
+        for uploaded_file in uploaded_files:
+            df = pd.read_csv(uploaded_file)
+            dfs[uploaded_file.name] = df
+        return dfs
+    return None
+
+# CSV Yükleme
+csv_files = load_uploaded_csv()
+
+# Yüklenen dosyaları göster
+if csv_files:
+    for filename, df in csv_files.items():
+        st.write(f"**{filename}**")
+        st.dataframe(df)
+else:
+    st.warning("Lütfen CSV dosyalarını yükleyin.")

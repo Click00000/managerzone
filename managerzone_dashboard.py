@@ -142,3 +142,31 @@ elif menu == "U18/U21/U23 Kadro Detayları":
     with tabs[1]: st.dataframe(u18.sort_values("value", ascending=False))
     with tabs[2]: st.dataframe(u21.sort_values("value", ascending=False))
     with tabs[3]: st.dataframe(u23.sort_values("value", ascending=False))
+
+# Takım ve oyuncu detayları
+def display_player_details(player_id):
+    player = players_all[players_all["player_id"] == player_id].iloc[0]
+    st.write(f"**{player['name']}**")
+    st.write(f"Yaş: {player['age']}")
+    st.write(f"Değer: {player['value']}")
+    matches_played = match_details_all[match_details_all["player_id"] == player_id]
+    st.write(f"Oynadığı Maç Sayısı: {matches_played.shape[0]}")
+
+def display_team_details(team_name):
+    team_players = players_all[players_all["team_name"] == team_name]
+    total_value = team_players["value"].sum()
+    transfers = team_players.groupby("team_name")["player_id"].count().reset_index(name="transfers")
+    st.write(f"**{team_name}**")
+    st.write(f"Kadro Değeri: {total_value}")
+    st.write(f"Yapılan Transfer Sayısı: {transfers['transfers'].iloc[0]}")
+    st.write(f"**Tahmini Lig Sıralaması:** 3. (Örnek Sıralama)")  # Bu kısmı daha dinamik hale getirebiliriz
+    st.write(f"**Aktif Durum:** Aktif" )  # Bu kısmı da sistemle bağlayabiliriz
+
+# Oyuncu ve Takım Detayları
+if st.button("Takım Detayları"):
+    team_name = st.selectbox("Bir takım seç", players_all["team_name"].unique(), key="team_selectbox_2")
+    display_team_details(team_name)
+
+if st.button("Oyuncu Detayları"):
+    player_id = st.selectbox("Bir oyuncu seç", players_all["player_id"].unique(), key="player_selectbox_1")
+    display_player_details(player_id)
